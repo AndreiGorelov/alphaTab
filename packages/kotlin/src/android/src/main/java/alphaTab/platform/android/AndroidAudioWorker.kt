@@ -15,7 +15,6 @@ internal class AndroidAudioWorker(
     private var _track: AudioTrack
     private var _writeThread: Thread? = null
     private var _buffer: FloatArray
-    private var _stopped: Boolean = false
     private val _playingSemaphore: Semaphore = Semaphore(1)
     private val _updateTimer: ScheduledExecutorService
 
@@ -55,7 +54,7 @@ internal class AndroidAudioWorker(
     }
 
     private fun writeSamples() {
-        while (!_stopped) {
+        while (!Thread.currentThread().isInterrupted) {
             if (_track.playState == AudioTrack.PLAYSTATE_PLAYING) {
                 val samplesFromBuffer = _output.read(_buffer, 0, _buffer.size)
                 if (_previousPosition == -1) {
@@ -64,18 +63,21 @@ internal class AndroidAudioWorker(
                 }
                 _track.write(_buffer, 0, samplesFromBuffer, AudioTrack.WRITE_BLOCKING)
             } else {
-                _playingSemaphore.acquire() // wait for playing to start
-                _playingSemaphore.release() // release semaphore for others
+                try {
+                    _playingSemaphore.acquire() // wait for playing to start
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt() // restore flag
+                }
             }
         }
+        _playingSemaphore.release() // release semaphore for others
     }
 
     fun close() {
-        _playingSemaphore.release() // proceed thread
-        _stopped = true
         _track.stop()
-        _writeThread!!.interrupt()
-        _writeThread!!.join()
+        _writeThread?.interrupt()
+        _writeThread?.join()
+        _writeThread = null
         _track.release()
         _updateTimer.shutdown()
     }
@@ -84,7 +86,6 @@ internal class AndroidAudioWorker(
         if (_track.playState != AudioTrack.PLAYSTATE_PLAYING) {
             _previousPosition = _track.playbackHeadPosition
             _track.play()
-            _stopped = false
 
             _updateSchedule = _updateTimer.scheduleWithFixedDelay(
                 {
@@ -100,7 +101,6 @@ internal class AndroidAudioWorker(
     fun pause() {
         if (_track.playState == AudioTrack.PLAYSTATE_PLAYING) {
             _track.pause()
-            _playingSemaphore.acquire() // block thread
             _updateSchedule?.cancel(true)
         }
     }
