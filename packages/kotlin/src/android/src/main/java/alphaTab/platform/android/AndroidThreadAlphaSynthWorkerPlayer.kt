@@ -69,6 +69,9 @@ internal class AndroidThreadAlphaSynthWorkerPlayer : IAlphaSynth, Runnable {
         _isCancelled = true
         _workerThread.interrupt()
         _workerThread.join()
+        _workerQueue.clear()
+        _player?.destroy()
+        _player = null
     }
 
     override fun run() {
