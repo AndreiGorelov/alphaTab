@@ -212,6 +212,76 @@ export abstract class LineBarRenderer extends BarRendererBase {
         return this.getBeamDirection(helper);
     }
 
+    private static _toTupletDigitSymbol(digit: number): MusicFontSymbol | null {
+        switch (digit) {
+            case 0:
+                return MusicFontSymbol.Tuplet0;
+            case 1:
+                return MusicFontSymbol.Tuplet1;
+            case 2:
+                return MusicFontSymbol.Tuplet2;
+            case 3:
+                return MusicFontSymbol.Tuplet3;
+            case 4:
+                return MusicFontSymbol.Tuplet4;
+            case 5:
+                return MusicFontSymbol.Tuplet5;
+            case 6:
+                return MusicFontSymbol.Tuplet6;
+            case 7:
+                return MusicFontSymbol.Tuplet7;
+            case 8:
+                return MusicFontSymbol.Tuplet8;
+            case 9:
+                return MusicFontSymbol.Tuplet9;
+            default:
+                return null;
+        }
+    }
+
+    private static _appendTupletNumberSymbols(target: MusicFontSymbol[], value: number): void {
+        let _value = value;
+        if (_value - _value !== 0) {
+            _value = 0;
+        }
+        _value = Math.max(0, Math.floor(Math.abs(_value)));
+
+        const appendDecimalDigits = (): void => {
+            const digits = _value.toString();
+            let hasAnySymbol = false;
+            for (let i = 0; i < digits.length; i++) {
+                const digit = digits.charCodeAt(i) - 48;
+                const symbol = LineBarRenderer._toTupletDigitSymbol(digit);
+                if (symbol !== null) {
+                    target.push(symbol);
+                    hasAnySymbol = true;
+                }
+            }
+            if (!hasAnySymbol) {
+                target.push(MusicFontSymbol.Tuplet0);
+            }
+        };
+
+        if (_value > 10 && _value <= 19) {
+            const tens = Math.floor(_value / 10);
+            const ones = _value - 10;
+            const symTens = LineBarRenderer._toTupletDigitSymbol(tens);
+            const symOnes = LineBarRenderer._toTupletDigitSymbol(ones);
+            if (symTens !== null && symOnes !== null) {
+                target.push(symTens, symOnes);
+                return;
+            }
+        }
+
+        if (_value < 10) {
+            const sym = LineBarRenderer._toTupletDigitSymbol(_value);
+            target.push(sym !== null ? sym : MusicFontSymbol.Tuplet0);
+            return;
+        }
+
+        appendDecimalDigits();
+    }
+
     protected calculateBeamYWithDirection(h: BeamingHelper, x: number, direction: BeamDirection): number {
         this.ensureBeamDrawingInfo(h, direction);
         return h.drawingInfos.get(direction)!.calcY(x);
@@ -259,22 +329,9 @@ export abstract class LineBarRenderer extends BarRendererBase {
             s = [MusicFontSymbol.Tuplet1, MusicFontSymbol.Tuplet3];
         } else {
             s = [];
-            const zero = MusicFontSymbol.Tuplet0 as number;
-            if (num > 10) {
-                s.push((zero + Math.floor(num / 10)) as MusicFontSymbol);
-                s.push((zero + (num - 10)) as MusicFontSymbol);
-            } else {
-                s.push((zero + num) as MusicFontSymbol);
-            }
-
+            LineBarRenderer._appendTupletNumberSymbols(s, num);
             s.push(MusicFontSymbol.TupletColon);
-
-            if (den > 10) {
-                s.push((zero + Math.floor(den / 10)) as MusicFontSymbol);
-                s.push((zero + (den - 10)) as MusicFontSymbol);
-            } else {
-                s.push((zero + den) as MusicFontSymbol);
-            }
+            LineBarRenderer._appendTupletNumberSymbols(s, den);
         }
 
         // check if we need to paint simple footer
